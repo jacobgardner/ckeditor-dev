@@ -44,7 +44,7 @@ CKEDITOR.editorConfig = function(config) {
         'liststyle,' +
         'magicline,' +
         'maximize,' +
-        'newpage,' +
+		'newpage,' +
         'pagebreak,' +
         'pastefromword,' +
         'pastetext,' +
@@ -69,6 +69,8 @@ CKEDITOR.editorConfig = function(config) {
         'undo,' +
         'wysiwygarea';
 	// %REMOVE_END%
+
+	config.extraPlugins = 'paginate';
 
     config.toolbarGroups = [
         { name: 'document', groups: ['mode', 'document', 'doctools'] },

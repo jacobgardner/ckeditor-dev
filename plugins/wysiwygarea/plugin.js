@@ -466,6 +466,7 @@
 					// Work around Firefox bug - error prune when called from XUL (https://dev.ckeditor.com/ticket/320),
 					// defer it thanks to the async nature of this method.
 					try {
+						console.log('Setting Data:', data);
 						doc.write( data );
 					} catch ( e ) {
 						setTimeout( function() {

@@ -2,13 +2,34 @@
 
 <head>
 	<title>CKEditor</title>
+	<style>
+		.container {
+			width: 100%;
+			display: flex;
+			flex-direction: row;
+		}
+
+		.left, .right {
+			flex-grow: 1;
+		}
+
+
+	</style>
 </head>
 
 <body>
-	<textarea name="editor" id="editor"></textarea>
+	<div class="container">
+		<div class="left">
+			<textarea name="editor" id="editor"></textarea>
+		</div>
+		<div class="right" id="preview"></div>
+	</div>
 	<script src="./ckeditor.js"></script>
 	<script>
-		CKEDITOR.replace('editor');
+		CKEDITOR.replace('editor', {
+			contentsCss: ['contents.css', 'paginate.css'],
+			bodyClass: 'page'
+		});
 	</script>
 </body>
 
