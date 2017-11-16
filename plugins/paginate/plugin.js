@@ -1,3 +1,6 @@
+// @ts-check
+// import { join } from "path";
+
 /**
  * @license Copyright (c) 2003-2017, CKSource - Frederico Knabben. All rights reserved.
  * For licensing, see LICENSE.md or https://ckeditor.com/license
@@ -19,7 +22,7 @@
         // icons: 'pagebreak,pagebreak-rtl', // %REMOVE_LINE_CORE%
         hidpi: true, // %REMOVE_LINE_CORE%
         onLoad: function() {
-            console.log(editor.document);
+            // console.log(editor.document);
             // var cssStyles = (
             // 		'background:url(' + CKEDITOR.getUrl( this.path + 'images/pagebreak.gif' ) + ') no-repeat center center;' +
             // 		'clear:both;' +
@@ -88,9 +91,9 @@
                     const html = editable.getHtml();
 
                     iframe.$.contentWindow.document.body.innerHTML = html;
-                    console.log(iframe.$.contentWindow.document.body);
+                    // console.log(iframe.$.contentWindow.document.body);
 
-                    console.log(html);
+                    // console.log(html);
                 });
 
                 // observer.observe(editable.$, {
@@ -108,11 +111,59 @@
                 // });
 
                 const range = document.createRange();
-                const pageHeight = 170;
+				const pageHeight = 170;
+
+				function findSplitElement(root, breakPoint, clientTop, path) {
+					if (!root.childNodes.length) {
+						return root;
+					}
+
+					// console.log(Array.from(root.childNodes).map(n => {range.selectNodeContents(n); return [range.getBoundingClientRect().top - clientTop, range.getBoundingClientRect().bottom - clientTop];}).map(r => `[${r[0]}->${r[1]}]`).join(', '))
+					// [3->20], [43->60], [83->100], [123->140], [163->180], [203->220], [243->260], [283->300], [323->340]
+
+					let [lowerBound, upperBound] = [0, root.childNodes.length - 1];
+
+					let current = root.childNodes[0];
+					let pivot = 0;
+					while (upperBound !== lowerBound) {
+						pivot = Math.floor((upperBound + lowerBound) / 2);
+						current = root.childNodes[pivot];
+						range.selectNodeContents(current);
+
+						const rect = range.getBoundingClientRect();
+
+						if (breakPoint <= rect.top - clientTop) {
+							if (upperBound - lowerBound === 1) {
+								path.push(pivot)
+								return findSplitElement(current, breakPoint, clientTop, path);
+							}
+							// console.log('<-]');
+                            upperBound = pivot;
+						} else if (breakPoint >= rect.bottom - clientTop) {
+							if (upperBound - lowerBound === 1) {
+								path.push(pivot + 1)
+								return findSplitElement(root.childNodes[pivot + 1], breakPoint, clientTop, path);
+							}
+							// console.log('[->');
+							lowerBound = pivot;
+						} else {
+							path.push(pivot);
+							return findSplitElement(current, breakPoint, clientTop, path);
+						}
+					}
+
+					path.push(pivot);
+					return findSplitElement(current, breakPoint, clientTop, path);
+
+				}
+
+				function *iterateRange(range) {
+					range.commonAncestorContainer
+				}
 
                 function builtOffsetPath(element, breakPoint, top) {
                     for (const child of element.children) {
-                        console.log('Rect:', child.getClientRects());
+                        // console.log('Rect:', child.getClientRects());
 					}
 
                     if (!element.children.length) {
@@ -120,37 +171,18 @@
 					}
 
 					range.selectNode(element);
-                    // range.setStart(element, 0);
-                    // range.setEnd(element, element.children.length);
 
                     const rects = range.getClientRects();
-					console.log('Lengths:', rects.length, element.children.length);
-					console.log(rects);
+					// console.log('Lengths:', rects.length, element.children.length);
+					// console.log(rects);
 
                     let [left, right] = [0, element.children.length - 1];
 
-                    // console.log(
-                    //     Array.prototype.map.call(element.children, e => [
-                    //         e.getBoundingClientRect().top - top,
-                    //         e.getBoundingClientRect().bottom - top,
-                    //         e
-                    //     ])
-                    // );
-
                     while (left !== right) {
-                        // for (let i = 0; i < 10; i += 1) {
                         const pivot = Math.floor((left + right) / 2);
 
                         const selected = element.children[pivot];
                         const rect = selected.getBoundingClientRect();
-
-                        // console.log(
-                        //     pivot,
-                        //     [left, right],
-                        //     rect.top - top,
-                        //     rect.bottom - top,
-                        //     breakPoint
-                        // );
 
                         if (breakPoint <= rect.top - top) {
                             console.log('<-] Right');
@@ -169,9 +201,15 @@
                                 breakPoint,
                                 top
                             );
-                            break;
                         }
-                    }
+					}
+
+					const rect = element.children[left].getBoundingClientRect();
+					console.log('BP:', left, element.children.length, element.children[left].bottom, breakPoint);
+					if (rect.bottom <= breakPoint) {
+						return null;
+					}
+					return element.children[left];
                     // console.log(left);
                 }
 
@@ -191,23 +229,58 @@
                     // const fullHeight = bottom - top;
                     // const pageCount = Math.ceil(fullHeight / pageHeight);
 
-                    let pageNumber = 0;
+					let pageNumber = 0;
+					const clientPageTop = root.children[0].getBoundingClientRect().top;
+
+					const splitElements = [];
 
                     while (1) {
                         pageNumber += 1;
                         const pageStart = pageNumber * pageHeight;
 
-                        // console.log(root.children[0].getBoundingClientRect().top)
+						// console.log(root.children[0].getBoundingClientRect().top)
 
-                        const offsets = builtOffsetPath(
-                            root,
-                            pageStart,
-                            root.children[0].getBoundingClientRect().top
-                        );
-                        if (!offsets) {
-                            break;
-                        }
-                    }
+						const path = [];
+						const element = findSplitElement(root, pageStart, clientPageTop, path);
+
+						if (!element) {break;}
+
+						range.selectNode(element);
+						// console.log(element, range.getBoundingClientRect().bottom - clientPageTop, pageStart);
+						if (range.getBoundingClientRect().bottom - clientPageTop <= pageStart) {
+							break;
+						}
+
+						if (pageNumber > 10000) {
+							// TODO: Remove for prod.
+							throw new Error('Probably in an infinite loop.')
+						}
+
+						splitElements.push([path, pageStart])
+
+						// console.log('Valid Element:', element, path)
+					}
+
+					const newBody = iframe.$.contentWindow.document.body;
+					newBody.innerHTML = html;
+
+					function getNode(root, path, idx = 0) {
+						if (idx < path.length) {
+							return getNode(root.childNodes[path[idx]], path, idx + 1);
+						} else {
+							return root;
+						}
+					}
+
+					for (const [path, splitY] of splitElements) {
+						const element = getNode(newBody, path);
+						// console.log(element);
+
+						element.parentNode.insertBefore(document.createElement('hr'), element);
+						// let parent = element;
+
+
+					}
 
                     // for (let i = 1; i < pageCount; i += 1) {
                     // 	const pageStart = i * pageHeight;
@@ -226,8 +299,8 @@
 
                     // console.log(editor.document.$.body);
 
-                    iframe.$.contentWindow.document.body.innerHTML =
-                        html.slice(0, 100) + '<hr />' + html.slice(100);
+                    // iframe.$.contentWindow.document.body.innerHTML =
+                    //     html.slice(0, 100) + '<hr />' + html.slice(100);
                 }
 
                 // contentSpace.append(iframe);
@@ -257,7 +330,7 @@
             // } );
         },
         afterInit: function(editor) {
-            console.log(editor.document);
+            // console.log(editor.document);
             // // Register a filter to displaying placeholders after mode change.
             // var dataProcessor = editor.dataProcessor,
             // 	dataFilter = dataProcessor && dataProcessor.dataFilter,
