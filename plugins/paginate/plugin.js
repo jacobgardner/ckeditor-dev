@@ -154,91 +154,53 @@
 
 					path.push(pivot);
 					return findSplitElement(current, breakPoint, clientTop, path);
-
 				}
 
-				function *iterateRange(range) {
-					range.commonAncestorContainer
+				function findTextNodeSplit(element, breakPoint, clientTop) {
+					const textContent = element.textContent;
+
+					let [lowerBound, upperBound] = [0, textContent.length];
+
+					while (lowerBound !== upperBound) {
+						const pivot = Math.floor((upperBound + lowerBound) / 2);
+
+						range.setStart(element, pivot);
+						range.setEnd(element, pivot);
+
+						console.log(`Range: [${lowerBound}, ${upperBound}]`)
+
+						const rect = range.getBoundingClientRect();
+
+						if (breakPoint <= rect.top - clientTop) {
+							console.log(`<-] ${breakPoint} <= ${rect.top - clientTop}`);
+							if (upperBound - lowerBound === 1) {
+								return pivot;
+							}
+							upperBound = pivot;
+						} else {
+							console.log(`[-> ${breakPoint} > ${rect.top - clientTop}`);
+							if (upperBound - lowerBound === 1) {
+								return pivot + 1;
+							}
+							lowerBound = pivot;
+						}
+					}
+
+					return lowerBound;
 				}
-
-                function builtOffsetPath(element, breakPoint, top) {
-                    for (const child of element.children) {
-                        // console.log('Rect:', child.getClientRects());
-					}
-
-                    if (!element.children.length) {
-                        return;
-					}
-
-					range.selectNode(element);
-
-                    const rects = range.getClientRects();
-					// console.log('Lengths:', rects.length, element.children.length);
-					// console.log(rects);
-
-                    let [left, right] = [0, element.children.length - 1];
-
-                    while (left !== right) {
-                        const pivot = Math.floor((left + right) / 2);
-
-                        const selected = element.children[pivot];
-                        const rect = selected.getBoundingClientRect();
-
-                        if (breakPoint <= rect.top - top) {
-                            console.log('<-] Right');
-                            right = pivot;
-                        } else if (breakPoint >= rect.bottom - top) {
-                            console.log('[-> Left');
-                            if (right - left === 1) {
-                                left += 1;
-                            } else {
-                                left = pivot;
-                            }
-                        } else {
-                            left = right = pivot;
-                            return builtOffsetPath(
-                                element.children[pivot],
-                                breakPoint,
-                                top
-                            );
-                        }
-					}
-
-					const rect = element.children[left].getBoundingClientRect();
-					console.log('BP:', left, element.children.length, element.children[left].bottom, breakPoint);
-					if (rect.bottom <= breakPoint) {
-						return null;
-					}
-					return element.children[left];
-                    // console.log(left);
-                }
 
                 function htmlModified() {
                     const html = editable.getHtml();
 
-                    const root = editor.document.$.body;
-                    // const children = editor.document.$.body.children;
-
-                    // range.setStart(editor.document.$.body, 0);
-                    // range.setEnd(editor.document.$.body, children.length);
-
-                    // const rects = range.getClientRects();
-                    // const top = rects[0].top;
-                    // const bottom = rects[rects.length - 1].bottom;
-
-                    // const fullHeight = bottom - top;
-                    // const pageCount = Math.ceil(fullHeight / pageHeight);
+					const root = editor.document.$.body;
 
 					let pageNumber = 0;
 					const clientPageTop = root.children[0].getBoundingClientRect().top;
-
 					const splitElements = [];
 
                     while (1) {
                         pageNumber += 1;
                         const pageStart = pageNumber * pageHeight;
-
-						// console.log(root.children[0].getBoundingClientRect().top)
 
 						const path = [];
 						const element = findSplitElement(root, pageStart, clientPageTop, path);
@@ -246,7 +208,7 @@
 						if (!element) {break;}
 
 						range.selectNode(element);
-						// console.log(element, range.getBoundingClientRect().bottom - clientPageTop, pageStart);
+
 						if (range.getBoundingClientRect().bottom - clientPageTop <= pageStart) {
 							break;
 						}
@@ -257,12 +219,13 @@
 						}
 
 						splitElements.push([path, pageStart])
-
-						// console.log('Valid Element:', element, path)
 					}
 
 					const newBody = iframe.$.contentWindow.document.body;
 					newBody.innerHTML = html;
+
+					console.log(splitElements);
+					console.log(html);
 
 					function getNode(root, path, idx = 0) {
 						if (idx < path.length) {
@@ -274,9 +237,36 @@
 
 					for (const [path, splitY] of splitElements) {
 						const element = getNode(newBody, path);
-						// console.log(element);
 
-						element.parentNode.insertBefore(document.createElement('hr'), element);
+						console.log(element, newBody, path);
+
+						if (element.nodeType === Node.TEXT_NODE) {
+							const splitOffset = findTextNodeSplit(element, splitY, clientPageTop);
+							console.log('Split Offset:', splitOffset);
+
+							if (splitOffset === 0) {
+								element.parentNode.insertBefore(document.createElement('hr'), element);
+							} else {
+								const pre = element.textContent.slice(0, splitOffset);
+								const post = element.textContent.slice(splitOffset);
+								console.log('Full:', element.textContent);
+								console.log('split:', splitOffset)
+								console.log('Pre:', pre);
+								console.log('Post:', post);
+								element.parentNode.insertBefore(document.createTextNode(pre), element)
+								element.parentNode.insertBefore(document.createElement('hr'), element);
+								element.parentNode.insertBefore(document.createTextNode(post), element)
+								element.parentNode.removeChild(element);
+							}
+
+						} else if (element.nodeType === Node.ELEMENT_NODE) {
+							console.log(element);
+							throw new Error("Not yet implemented.")
+						} else {
+							throw new Error("Unsupported node type.")
+						}
+						console.log(element.nodeType);
+
 						// let parent = element;
 
 
