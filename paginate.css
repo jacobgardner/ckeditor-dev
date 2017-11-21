@@ -1,5 +1,6 @@
 
 body.page {
+	position: relative;
     width: 15.8cm;
     min-height: 21cm;
     padding: 1cm 2cm 2cm;
@@ -15,3 +16,20 @@ body.page {
     font-family: "Nunito Sans", Verdana, Helvetica, sans-serif;
 }
 
+.page-breaker {
+	border: 0;
+ 	padding-top: 30px;
+	padding-bottom: 50px;
+}
+
+.page-breaker::after {
+	content: ' ';
+	position: absolute;
+	height: 20px;
+
+	left: -3px;
+	right: -3px;
+	margin: 0 auto;
+	border: 1px solid gray;
+	background: white;
+}
