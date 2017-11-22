@@ -19,7 +19,7 @@ body.page {
 .page-breaker {
 	border: 0;
  	padding-top: 30px;
-	padding-bottom: 50px;
+	padding-bottom: 70px;
 }
 
 .page-breaker::after {

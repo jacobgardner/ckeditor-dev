@@ -10,12 +10,12 @@
  * @fileOverview Horizontal Page Break
  */
 
-"use strict";
+'use strict';
 
 (function() {
     // Register a plugin named "paginate".
-    CKEDITOR.plugins.add("paginate", {
-        requires: "fakeobjects",
+    CKEDITOR.plugins.add('paginate', {
+        requires: 'fakeobjects',
         // jscs:disable maximumLineLength
         // lang: 'af,ar,az,bg,bn,bs,ca,cs,cy,da,de,de-ch,el,en,en-au,en-ca,en-gb,eo,es,es-mx,et,eu,fa,fi,fo,fr,fr-ca,gl,gu,he,hi,hr,hu,id,is,it,ja,ka,km,ko,ku,lt,lv,mk,mn,ms,nb,nl,no,oc,pl,pt,pt-br,ro,ru,si,sk,sl,sq,sr,sr-latn,sv,th,tr,tt,ug,uk,vi,zh,zh-cn', // %REMOVE_LINE_CORE%
         // jscs:enable maximumLineLength
@@ -24,54 +24,147 @@
         onLoad: function() {},
 
         init: function(editor) {
-            editor.once("instanceReady", () => {
+            editor.once('instanceReady', () => {
                 var src =
-                    "document.open();" +
+                    'document.open();' +
                     // In IE, the document domain must be set any time we call document.open().
                     (CKEDITOR.env.ie
-                        ? "(" + CKEDITOR.tools.fixDomain + ")();"
-                        : "") +
-                    "document.close();";
+                        ? '(' + CKEDITOR.tools.fixDomain + ')();'
+                        : '') +
+                    'document.close();';
 
                 // With IE, the custom domain has to be taken care at first,
                 // for other browers, the 'src' attribute should be left empty to
                 // trigger iframe's 'load' event.
                 // Microsoft Edge throws "Permission Denied" if treated like an IE (https://dev.ckeditor.com/ticket/13441).
                 if (CKEDITOR.env.air) {
-                    src = "javascript:void(0)"; // jshint ignore:line
+                    src = 'javascript:void(0)'; // jshint ignore:line
                 } else if (CKEDITOR.env.ie && !CKEDITOR.env.edge) {
                     src =
-                        "javascript:void(function(){" +
+                        'javascript:void(function(){' +
                         encodeURIComponent(src) +
-                        "}())"; // jshint ignore:line
+                        '}())'; // jshint ignore:line
                 } else {
-                    src = "";
+                    src = '';
                 }
 
                 var iframe = CKEDITOR.dom.element.createFromHtml(
                     '<iframe src="' + src + '" frameBorder="0"></iframe>'
                 );
-                iframe.setStyles({ width: "100%", height: "100%" });
-                iframe.addClass("cke_wysiwyg_frame").addClass("cke_reset");
+                iframe.setStyles({ width: '100%', height: '100%' });
+				iframe.addClass('cke_wysiwyg_frame').addClass('cke_reset');
 
-                var contentSpace = editor.ui.space("contents");
-                document.getElementById("preview").appendChild(iframe.$);
+				const oldIframe = document.querySelector('iframe');
+
+				var contentSpace = editor.ui.space( 'contents' );
+				contentSpace.append( iframe );
+
+				oldIframe.style.display = 'none';
+
+                // var contentSpace = editor.ui.space('contents');
+                // document.getElementById('preview').appendChild(iframe.$);
 
                 const editable = editor.editable();
 
                 iframe.$.contentWindow.document.documentElement.innerHTML =
-                    editor.document.$.documentElement.innerHTML;
+					editor.document.$.documentElement.innerHTML;
+
+				console.log(editor.document);
+
+                const previewWin = iframe.$.contentWindow;
+
+                const previewBody = previewWin.document.body;
+                previewBody.contentEditable = true;
+
+                function getNode(root, path, idx = 0) {
+                    if (idx < path.length) {
+                        return getNode(
+                            root.childNodes[path[idx]],
+                            path,
+                            idx + 1
+                        );
+                    } else {
+                        return root;
+                    }
+                }
+
+                function buildPath(element) {
+                    const path = [];
+
+                    let parent = element;
+                    while (parent !== previewBody) {
+                        path.push(
+                            Array.prototype.indexOf.call(
+                                parent.parentNode.childNodes,
+                                parent
+                            )
+                        );
+
+                        parent = parent.parentNode;
+                    }
+
+                    return path.reverse();
+                }
+
+                previewWin.document.addEventListener('selectionchange', evt => {
+                    const range = previewWin.getSelection().getRangeAt(0);
+                    const hiddenWindow = editor.document.$.defaultView;
+                    const hiddenDocument = editor.document.$;
+
+					const hiddenSelection = hiddenWindow.getSelection();
+					if (hiddenSelection.rangeCount === 0) {
+						const newRange = hiddenDocument.createRange();
+						newRange.setStart(hiddenDocument.body, 0);
+						newRange.setEnd(hiddenDocument.body, 0);
+						hiddenSelection.addRange(newRange);
+					}
+                    const hiddenRange = hiddenSelection.getRangeAt(0);
+                    const container = range.startContainer;
+
+                    editable.$.focus();
+                    if (container.originalNode) {
+                        const trueOffset =
+                            (container.trueOffset || 0) + range.startOffset;
+                        console.log(
+                            'Offset Calculation:',
+                            container.trueOffset || 0,
+                            range.startOffset,
+                            trueOffset
+                        );
+
+                        hiddenRange.setStart(
+                            container.originalNode,
+                            trueOffset
+                        );
+                        hiddenRange.setEnd(container.originalNode, trueOffset);
+
+                        console.log(
+                            'Node, Offset:',
+                            hiddenWindow,
+                            container.originalNode,
+                            trueOffset
+                        );
+                    } else {
+						const path = buildPath(container);
+
+						const hiddenNode = getNode(editor.document.$.body, path);
+						hiddenRange.setStart(hiddenNode, range.startOffset);
+						hiddenRange.setEnd(hiddenNode, range.startOffset);
+
+                    }
+                });
 
                 const observer = new MutationObserver(() => {
                     const html = editable.getHtml();
 
-                    iframe.$.contentWindow.document.body.innerHTML = html;
+                    previewBody.innerHTML = html;
                 });
 
-                editable.$.addEventListener("input", htmlModified);
+                editable.$.addEventListener('input', htmlModified);
 
                 const range = document.createRange();
-                const pageHeight = 800;
+                // const pageHeight = 800;
+                const pageHeight = 100;
 
                 function findSplitElement(root, breakPoint, clientTop, path) {
                     if (!root.childNodes.length) {
@@ -96,7 +189,7 @@
                         range.selectNodeContents(current);
 
                         const rect = range.getBoundingClientRect();
-                        console.log("Ranges:", rect.top, clientTop);
+                        console.log('Ranges:', rect.top, clientTop);
 
                         if (breakPoint <= rect.top - clientTop) {
                             if (upperBound - lowerBound === 1) {
@@ -123,22 +216,22 @@
                             // console.log('[->');
                             lowerBound = pivot;
                         } else {
-							// If we're down to the last two, then pivot *SHOULD* be pointing to the first element
-							// that we collide with and we can explore further.
+                            // If we're down to the last two, then pivot *SHOULD* be pointing to the first element
+                            // that we collide with and we can explore further.
 
-							// TODO: We can merge this with the first if, I believe.
-							if (upperBound - lowerBound === 1) {
-								path.push(pivot);
-								return findSplitElement(
-									current,
-									breakPoint,
-									clientTop,
-									path
-								);
-							}
+                            // TODO: We can merge this with the first if, I believe.
+                            if (upperBound - lowerBound === 1) {
+                                path.push(pivot);
+                                return findSplitElement(
+                                    current,
+                                    breakPoint,
+                                    clientTop,
+                                    path
+                                );
+                            }
 
-							upperBound = pivot;
-                      }
+                            upperBound = pivot;
+                        }
                     }
 
                     path.push(pivot);
@@ -201,7 +294,7 @@
                     // console.log(computed.marginTop);
                     const clientPageTop = root.children[0].getBoundingClientRect()
                         .top;
-                    console.log("Page Top:", clientPageTop);
+                    console.log('Page Top:', clientPageTop);
                     const splitElements = [];
 
                     let pageTop = clientPageTop;
@@ -234,7 +327,7 @@
 
                         if (pageNumber > 10000) {
                             // TODO: Remove for prod.
-                            throw new Error("Probably in an infinite loop.");
+                            throw new Error('Probably in an infinite loop.');
                         }
 
                         let splitOffset = 0;
@@ -272,10 +365,10 @@
 
                             remainder = // Math.max(
                                 pageHeight - (bot - pageTop);
-                                //0
+                            //0
                             // );
                             console.log(
-                                "Calc Remainder: ",
+                                'Calc Remainder: ',
                                 pageHeight,
                                 bot,
                                 pageTop,
@@ -292,12 +385,9 @@
                                 parent = parent.parentNode;
                             }
 
-							range.selectNodeContents(
-								parent.previousSibling
-							);
-							const bot = range.getBoundingClientRect().bottom;
-							remainder = pageHeight - (bot - pageTop);
-
+                            range.selectNodeContents(parent.previousSibling);
+                            const bot = range.getBoundingClientRect().bottom;
+                            remainder = pageHeight - (bot - pageTop);
 
                             pageTop = element.getBoundingClientRect().top;
                             // throw new Error('Not yet implemented.');
@@ -318,18 +408,6 @@
                     console.log(splitElements);
                     console.log(html);
 
-                    function getNode(root, path, idx = 0) {
-                        if (idx < path.length) {
-                            return getNode(
-                                root.childNodes[path[idx]],
-                                path,
-                                idx + 1
-                            );
-                        } else {
-                            return root;
-                        }
-                    }
-
                     for (const [
                         path,
                         splitY,
@@ -341,8 +419,8 @@
 
                         console.log(element, newBody, path);
 
-                        const hr = document.createElement("div");
-                        hr.className = "page-breaker";
+                        const hr = document.createElement('div');
+                        hr.className = 'page-breaker';
                         hr.style.marginTop = `${remainder}px`;
                         console.log(`Remainder: ${remainder}`);
 
@@ -357,17 +435,24 @@
                                 const post = element.textContent.slice(
                                     splitOffset
                                 );
-                                console.log("Full:", element.textContent);
-                                console.log("split:", splitOffset);
-                                console.log("Pre:", pre);
-                                console.log("Post:", post);
+                                console.log('Full:', element.textContent);
+                                console.log('split:', splitOffset);
+                                console.log('Pre:', pre);
+                                console.log('Post:', post);
+
+                                const preNode = document.createTextNode(pre);
+                                const postNode = document.createTextNode(post);
+                                preNode.originalNode = originalElement;
+                                postNode.trueOffset = pre.length;
+                                postNode.originalNode = originalElement;
+
                                 element.parentNode.insertBefore(
-                                    document.createTextNode(pre),
+                                    preNode,
                                     element
                                 );
                                 element.parentNode.insertBefore(hr, element);
                                 element.parentNode.insertBefore(
-                                    document.createTextNode(post),
+                                    postNode,
                                     element
                                 );
                                 element.parentNode.removeChild(element);
@@ -377,7 +462,7 @@
                             element.parentNode.insertBefore(hr, element);
                             // throw new Error("Not yet implemented.")
                         } else {
-                            throw new Error("Unsupported node type.");
+                            throw new Error('Unsupported node type.');
                         }
                         console.log(element.nodeType);
                     }
